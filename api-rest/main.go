@@ -23,16 +23,17 @@ func run(args []string) error {
 
 	server := NewServer()
 
-	Get(server, "/users", getUsers)
-	Post(server, "/users", postUsers)
-
-	server.Mux.Handle("GET /groups", Get2(server, getGroups))
+	server.Mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintln(w, "Hello.")
+	})
 
 	apiMux := http.NewServeMux()
 	server.Mux.Handle("/api/", http.StripPrefix("/api", apiMux))
 
-	apiMux.Handle("/users", Get2(server, apiGetUsers))
-	apiMux.Handle("/users/{user}", Get2(server, apiGetUsersUser))
+	apiMux.Handle("/users", HandleOutFunc(server, apiGetUsers))
+	apiMux.Handle("/users/{user}", HandleOutFunc(server, apiGetUsersUser))
+
+	apiMux.Handle("POST /users", HandleInOutFunc(server, apiPostUsers))
 
 	apiMux.Handle("GET /groups", HandleOutFunc(server, apiGetGroups))
 
@@ -85,4 +86,8 @@ func apiGetGroups(ctx context.Context, s *Server, r *Request) ([]Group, error) {
 	var groups []Group
 	groups = append(groups, Group{Name: "sudoers"})
 	return groups, nil
+}
+
+func apiPostUsers(ctx context.Context, s *Server, r *Request, newUser User) (User, error) {
+	return newUser, nil
 }
