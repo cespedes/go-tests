@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"log"
 	"net/http"
@@ -30,12 +29,12 @@ func run(args []string) error {
 	apiMux := http.NewServeMux()
 	server.Mux.Handle("/api/", http.StripPrefix("/api", apiMux))
 
-	apiMux.Handle("/users", HandleOutFunc(server, apiGetUsers))
-	apiMux.Handle("/users/{user}", HandleOutFunc(server, apiGetUsersUser))
+	apiMux.Handle("/users", HandleOut(apiGetUsers))
+	apiMux.Handle("/users/{user}", HandleOut(apiGetUsersUser))
 
-	apiMux.Handle("POST /users", HandleInOutFunc(server, apiPostUsers))
+	apiMux.Handle("POST /users", HandleInOut(apiPostUsers))
 
-	apiMux.Handle("GET /groups", HandleOutFunc(server, apiGetGroups))
+	apiMux.Handle("GET /groups", HandleOut(apiGetGroups))
 
 	err = http.ListenAndServe(":9988", server)
 
@@ -47,47 +46,30 @@ type User struct {
 	Login string `json:"login"`
 }
 
-func getUsers(r *Request) ([]User, error) {
-	var users []User
-	users = append(users, User{Name: "John"})
-	return users, nil
-}
-
-func postUsers(r *Request, newUser User) (User, error) {
-	user := User{Name: "New John"}
-	return user, nil
-}
-
 type Group struct {
 	Name string `json:"name"`
 }
 
-func getGroups(ctx context.Context, s *Server, r *Request) ([]Group, error) {
-	var groups []Group
-	groups = append(groups, Group{Name: "sudoers"})
-	return groups, nil
-}
-
-func apiGetUsers(ctx context.Context, s *Server, r *Request) ([]User, error) {
+func apiGetUsers(r *Request) ([]User, error) {
 	var users []User
 	users = append(users, User{Name: "John (API)"})
 	return users, nil
 }
 
-func apiGetUsersUser(ctx context.Context, s *Server, r *Request) (User, error) {
+func apiGetUsersUser(r *Request) (User, error) {
 	user := User{
-		Name:  "John Doe",
+		Name:  fmt.Sprintf("John Doe"),
 		Login: r.PathValue("user"),
 	}
 	return user, nil
 }
 
-func apiGetGroups(ctx context.Context, s *Server, r *Request) ([]Group, error) {
+func apiGetGroups(r *Request) ([]Group, error) {
 	var groups []Group
 	groups = append(groups, Group{Name: "sudoers"})
 	return groups, nil
 }
 
-func apiPostUsers(ctx context.Context, s *Server, r *Request, newUser User) (User, error) {
+func apiPostUsers(r *Request, newUser User) (User, error) {
 	return newUser, nil
 }

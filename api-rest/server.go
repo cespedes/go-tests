@@ -10,27 +10,66 @@ import (
 
 // Server represents a server.
 type Server struct {
-	Mux *http.ServeMux
+	Mux         *http.ServeMux
+	Middlewares []func(http.Handler) http.Handler
 }
 
 // Request wraps http.Request, offering all its data, and some more.
 type Request struct {
+	*Server
 	*http.Request
 }
 
 // ServeHTTP dispatches the request to the handler.
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// TODO: handle middleware
 	log.Printf("Server.ServeHTTP(%s %s)", r.Method, r.URL)
-	s.Mux.ServeHTTP(w, r)
+	var m http.Handler
+	m = s.Mux
+	for i := len(s.Middlewares) - 1; i >= 0; i-- {
+		m = s.Middlewares[i](m)
+	}
+	m.ServeHTTP(w, r)
 	// fmt.Fprintln(w, "Hello, world!")
 }
+
+type contextServerKey struct{}
 
 // NewServer allocates and returns a new Server.
 func NewServer() *Server {
 	var s Server
 	s.Mux = http.NewServeMux()
+
+	// This adds a middleware that adds the server struct
+	// to the context of all the requests.
+	s.Middlewares = append(s.Middlewares, func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ctx := r.Context()
+			ctx = context.WithValue(ctx, contextServerKey{}, s)
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	})
+
+	s.Middlewares = append(s.Middlewares, func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			fmt.Println("called middlewares[0]")
+			next.ServeHTTP(w, r)
+		})
+	})
+	s.Middlewares = append(s.Middlewares, func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			fmt.Println("called middlewares[1]")
+			next.ServeHTTP(w, r)
+		})
+	})
 	return &s
+}
+
+// NewRequest creates a new Request from a http.Request, ready to use.
+func NewRequest(r *http.Request) *Request {
+	return &Request{
+		Request: r,
+		Server:  r.Context().Value(contextServerKey{}).(*Server),
+	}
 }
 
 // outJSON writes the JSON-encoded object v to the http.ResponseWriter w.
@@ -44,34 +83,60 @@ func outJSON(w http.ResponseWriter, v any) {
 	}
 }
 
-// HandleOutFunc returns a HTTP handler that calls a function and encodes its output as a JSON response.
-func HandleOutFunc[Output any](
-	s *Server,
-	f func(ctx context.Context, s *Server, r *Request) (Output, error),
+func handleBefore(r *http.Request, permFuncs ...func(*Request) bool) (*Request, error) {
+	req := NewRequest(r)
+	for _, p := range permFuncs {
+		if !p(req) {
+			return nil, fmt.Errorf("permission denied")
+		}
+	}
+	return req, nil
+}
+
+func handleAfter(w http.ResponseWriter, out any, err error) {
+	if err != nil {
+		httpError(w, err)
+		return
+	}
+
+	// if the returned type is a string, output it as a "info" message:
+	if s, ok := out.(string); ok {
+		httpInfo(w, s)
+		return
+	}
+
+	outJSON(w, out)
+}
+
+// HandleOut returns a HTTP handler that calls a function and encodes its output as a JSON response.
+func HandleOut[Output any](
+	f func(*Request) (Output, error),
+	permFuncs ...func(*Request) bool,
 ) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		req := Request{
-			Request: r,
-		}
-
-		out, err := f(context.Background(), s, &req)
+		req, err := handleBefore(r, permFuncs...)
 		if err != nil {
 			httpError(w, err)
 			return
 		}
-		outJSON(w, out)
+
+		out, err := f(req)
+
+		handleAfter(w, out, err)
 	})
 }
 
-// HandleInOutFunc returns a HTTP handler that decodes a JSON input,
+// HandleInOut returns a HTTP handler that decodes a JSON input,
 // calls a function and encodes its output as a JSON response.
-func HandleInOutFunc[Input, Output any](
-	s *Server,
-	f func(ctx context.Context, s *Server, r *Request, input Input) (Output, error),
+func HandleInOut[Input, Output any](
+	f func(*Request, Input) (Output, error),
+	permFuncs ...func(*Request) bool,
 ) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		req := Request{
-			Request: r,
+		req, err := handleBefore(r, permFuncs...)
+		if err != nil {
+			httpError(w, err)
+			return
 		}
 
 		var input Input
@@ -82,11 +147,8 @@ func HandleInOutFunc[Input, Output any](
 			return
 		}
 
-		out, err := f(context.Background(), s, &req, input)
-		if err != nil {
-			httpError(w, err)
-			return
-		}
-		outJSON(w, out)
+		out, err := f(req, input)
+
+		handleAfter(w, out, err)
 	})
 }
