@@ -32,6 +32,11 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// fmt.Fprintln(w, "Hello, world!")
 }
 
+// AddMiddleware adds a new middleware to the server
+func (s *Server) AddMiddleware(f func(next http.Handler) http.Handler) {
+	s.Middlewares = append(s.Middlewares, f)
+}
+
 type contextServerKey struct{}
 
 // NewServer allocates and returns a new Server.
@@ -44,7 +49,7 @@ func NewServer() *Server {
 	s.Middlewares = append(s.Middlewares, func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ctx := r.Context()
-			ctx = context.WithValue(ctx, contextServerKey{}, s)
+			ctx = context.WithValue(ctx, contextServerKey{}, &s)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	})

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"fmt"
 	"log"
 	"net/http"
@@ -53,6 +54,7 @@ type Group struct {
 func apiGetUsers(r *Request) ([]User, error) {
 	var users []User
 	users = append(users, User{Name: "John (API)"})
+	return nil, sql.ErrNoRows
 	return users, nil
 }
 
