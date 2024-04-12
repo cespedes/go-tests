@@ -148,7 +148,7 @@ func HandleInOut[Input, Output any](
 
 		decoder := json.NewDecoder(r.Body)
 		if err := decoder.Decode(&input); err != nil {
-			httpError(w, fmt.Errorf("parsing input: %w", err), http.StatusBadRequest)
+			httpError(w, "parsing input: %w", err)
 			return
 		}
 
@@ -156,4 +156,9 @@ func HandleInOut[Input, Output any](
 
 		handleAfter(w, out, err)
 	})
+}
+
+// permission functions
+func OnlyRoot(r *Request) bool {
+	return r.Header.Get("auth") == "root"
 }

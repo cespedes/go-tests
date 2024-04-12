@@ -37,6 +37,10 @@ func run(args []string) error {
 
 	apiMux.Handle("GET /groups", HandleOut(apiGetGroups))
 
+	apiMux.Handle("GET /roles", HandleOut(apiGetRoles))
+	// apiMux.Handle("GET /roles/{role}", HandleOut(apiGetRolesRole))
+	apiMux.Handle("POST /roles", HandleInOut(apiPostRoles, OnlyRoot))
+
 	err = http.ListenAndServe(":9988", server)
 
 	return err
@@ -74,4 +78,19 @@ func apiGetGroups(r *Request) ([]Group, error) {
 
 func apiPostUsers(r *Request, newUser User) (User, error) {
 	return newUser, nil
+}
+
+type Role struct {
+	Name string
+}
+
+func apiGetRoles(r *Request) ([]Role, error) {
+	return []Role{
+		Role{Name: "Alpha"},
+		Role{Name: "Bravo"},
+	}, nil
+}
+
+func apiPostRoles(r *Request, role Role) (Role, error) {
+	return Role{}, nil
 }
