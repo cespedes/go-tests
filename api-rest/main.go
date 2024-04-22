@@ -23,6 +23,8 @@ func run(args []string) error {
 
 	server := NewServer()
 
+	server.AddMiddleware(logger)
+
 	server.Mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintln(w, "Hello.")
 	})
@@ -30,16 +32,16 @@ func run(args []string) error {
 	apiMux := http.NewServeMux()
 	server.Mux.Handle("/api/", http.StripPrefix("/api", apiMux))
 
-	apiMux.Handle("/users", HandleOut(apiGetUsers))
-	apiMux.Handle("/users/{user}", HandleOut(apiGetUsersUser))
+	apiMux.Handle("/users", Handle(apiGetUsers))
+	apiMux.Handle("/users/{user}", Handle(apiGetUsersUser))
 
-	apiMux.Handle("POST /users", HandleInOut(apiPostUsers))
+	apiMux.Handle("POST /users", Handle(apiPostUsers))
 
-	apiMux.Handle("GET /groups", HandleOut(apiGetGroups))
+	apiMux.Handle("GET /groups", Handle(apiGetGroups))
 
-	// apiMux.Handle("GET /roles", HandleOut(apiGetRoles))
-	// apiMux.Handle("GET /roles/{role}", HandleOut(apiGetRolesRole))
-	// apiMux.Handle("POST /roles", HandleInOut(apiPostRoles, OnlyRoot))
+	// apiMux.Handle("GET /roles", Handle(apiGetRoles))
+	// apiMux.Handle("GET /roles/{role}", Handle(apiGetRolesRole))
+	// apiMux.Handle("POST /roles", Handle(apiPostRoles, OnlyRoot))
 
 	apiMux.Handle("GET /roles", Handle(apiGetRoles))
 	// apiMux.Handle("GET /roles/{role}", Handle(apiGetRolesRole))
@@ -59,14 +61,14 @@ type Group struct {
 	Name string `json:"name"`
 }
 
-func apiGetUsers(r *Request) ([]User, error) {
+func apiGetUsers(r *Request, _ None) ([]User, error) {
 	var users []User
 	users = append(users, User{Name: "John (API)"})
 	return nil, sql.ErrNoRows
 	return users, nil
 }
 
-func apiGetUsersUser(r *Request) (User, error) {
+func apiGetUsersUser(r *Request, _ None) (User, error) {
 	user := User{
 		Name:  fmt.Sprintf("John Doe"),
 		Login: r.PathValue("user"),
@@ -74,7 +76,7 @@ func apiGetUsersUser(r *Request) (User, error) {
 	return user, nil
 }
 
-func apiGetGroups(r *Request) ([]Group, error) {
+func apiGetGroups(r *Request, _ None) ([]Group, error) {
 	var groups []Group
 	groups = append(groups, Group{Name: "sudoers"})
 	return groups, nil
@@ -88,7 +90,7 @@ type Role struct {
 	Name string
 }
 
-func apiGetRoles(r *Request) ([]Role, error) {
+func apiGetRoles(r *Request, _ None) ([]Role, error) {
 	return []Role{
 		Role{Name: "Alpha"},
 		Role{Name: "Bravo"},

@@ -6,10 +6,13 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"sync"
 )
 
 // Server represents a server.
 type Server struct {
+	once        sync.Once
+	root        http.Handler
 	Mux         *http.ServeMux
 	Middlewares []func(http.Handler) http.Handler
 }
@@ -22,13 +25,15 @@ type Request struct {
 
 // ServeHTTP dispatches the request to the handler.
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	s.once.Do(func() {
+		log.Println("Server.ServeHTTP: first time: chaining middlewares")
+		s.root = s.Mux
+		for i := len(s.Middlewares) - 1; i >= 0; i-- {
+			s.root = s.Middlewares[i](s.root)
+		}
+	})
 	log.Printf("Server.ServeHTTP(%s %s)", r.Method, r.URL)
-	var m http.Handler
-	m = s.Mux
-	for i := len(s.Middlewares) - 1; i >= 0; i-- {
-		m = s.Middlewares[i](m)
-	}
-	m.ServeHTTP(w, r)
+	s.root.ServeHTTP(w, r)
 	// fmt.Fprintln(w, "Hello, world!")
 }
 
@@ -88,100 +93,56 @@ func outJSON(w http.ResponseWriter, v any) {
 	}
 }
 
-func handleBefore(r *http.Request, permFuncs ...func(*Request) bool) (*Request, error) {
-	req := NewRequest(r)
-	for _, p := range permFuncs {
-		if !p(req) {
-			return nil, fmt.Errorf("permission denied")
-		}
-	}
-	return req, nil
-}
+// A None type will not be decoded as a body input.
+type None struct{}
 
-func handleAfter(w http.ResponseWriter, out any, err error) {
-	if err != nil {
-		httpError(w, err)
-		return
-	}
-
-	// if the returned type is a string, output it as a "info" message:
-	if s, ok := out.(string); ok {
-		httpInfo(w, s)
-		return
-	}
-
-	outJSON(w, out)
-}
-
-// HandleOut returns a HTTP handler that calls a function and encodes its output as a JSON response.
-func HandleOut[Output any](
-	f func(*Request) (Output, error),
-	permFuncs ...func(*Request) bool,
-) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		req, err := handleBefore(r, permFuncs...)
-		if err != nil {
-			httpError(w, err)
-			return
-		}
-
-		out, err := f(req)
-
-		handleAfter(w, out, err)
-	})
-}
-
-// HandleInOut returns a HTTP handler that decodes a JSON input,
+// Handle returns a HTTP handler that decodes a JSON input,
 // calls a function and encodes its output as a JSON response.
-func HandleInOut[Input, Output any](
+func Handle[Input, Output any](
 	f func(*Request, Input) (Output, error),
 	permFuncs ...func(*Request) bool,
 ) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		req, err := handleBefore(r, permFuncs...)
+		req := NewRequest(r)
+		for _, p := range permFuncs {
+			if !p(req) {
+				httpError(w, Error("permission denied"))
+				return
+			}
+		}
+
+		var input Input
+
+		if _, ok := any(input).(None); !ok {
+			decoder := json.NewDecoder(r.Body)
+			if err := decoder.Decode(&input); err != nil {
+				httpError(w, "parsing input: %w", err)
+				return
+			}
+		}
+
+		out, err := f(req, input)
+
 		if err != nil {
 			httpError(w, err)
 			return
 		}
 
-		var input Input
+		var o any = out
 
-		decoder := json.NewDecoder(r.Body)
-		if err := decoder.Decode(&input); err != nil {
-			httpError(w, "parsing input: %w", err)
+		// if the returned type is a string, output it as a "info" message:
+		if s, ok := o.(string); ok {
+			httpInfo(w, s)
 			return
 		}
 
-		out, err := f(req, input)
-
-		handleAfter(w, out, err)
-	})
-}
-
-// Handle returns a HTTP handler that decodes a JSON input,
-// calls a function and encodes its output as a JSON response.
-func Handle[Input any](
-	f func(*Request, Input) (any, error),
-	permFuncs ...func(*Request) bool,
-) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		req, err := handleBefore(r, permFuncs...)
-		if err != nil {
-			httpError(w, err)
+		// if the returned type is a []byte, output it directly:
+		if b, ok := o.([]byte); ok {
+			w.Write(b)
 			return
 		}
 
-		var input Input
-
-		decoder := json.NewDecoder(r.Body)
-		if err := decoder.Decode(&input); err != nil {
-			httpError(w, "parsing input: %w", err)
-			return
-		}
-
-		out, err := f(req, input)
-
-		handleAfter(w, out, err)
+		outJSON(w, out)
 	})
 }
 
