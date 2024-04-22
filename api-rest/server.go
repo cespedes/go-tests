@@ -158,6 +158,33 @@ func HandleInOut[Input, Output any](
 	})
 }
 
+// Handle returns a HTTP handler that decodes a JSON input,
+// calls a function and encodes its output as a JSON response.
+func Handle[Input any](
+	f func(*Request, Input) (any, error),
+	permFuncs ...func(*Request) bool,
+) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		req, err := handleBefore(r, permFuncs...)
+		if err != nil {
+			httpError(w, err)
+			return
+		}
+
+		var input Input
+
+		decoder := json.NewDecoder(r.Body)
+		if err := decoder.Decode(&input); err != nil {
+			httpError(w, "parsing input: %w", err)
+			return
+		}
+
+		out, err := f(req, input)
+
+		handleAfter(w, out, err)
+	})
+}
+
 // permission functions
 func OnlyRoot(r *Request) bool {
 	return r.Header.Get("auth") == "root"

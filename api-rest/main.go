@@ -37,9 +37,13 @@ func run(args []string) error {
 
 	apiMux.Handle("GET /groups", HandleOut(apiGetGroups))
 
-	apiMux.Handle("GET /roles", HandleOut(apiGetRoles))
+	// apiMux.Handle("GET /roles", HandleOut(apiGetRoles))
 	// apiMux.Handle("GET /roles/{role}", HandleOut(apiGetRolesRole))
-	apiMux.Handle("POST /roles", HandleInOut(apiPostRoles, OnlyRoot))
+	// apiMux.Handle("POST /roles", HandleInOut(apiPostRoles, OnlyRoot))
+
+	apiMux.Handle("GET /roles", Handle(apiGetRoles))
+	// apiMux.Handle("GET /roles/{role}", Handle(apiGetRolesRole))
+	apiMux.Handle("POST /roles", Handle(apiPostRoles, OnlyRoot))
 
 	err = http.ListenAndServe(":9988", server)
 
