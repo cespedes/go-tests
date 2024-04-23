@@ -11,15 +11,14 @@ import (
 )
 
 func logger(next http.Handler) http.Handler {
-	fmt.Println("outside: logger()")
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ww := NewWrapResponseWriter(w)
 		t1 := time.Now()
-		fmt.Println("logger: before next()")
-		next.ServeHTTP(w, r)
-		fmt.Println("logger: after next()")
+		next.ServeHTTP(ww, r)
 		t2 := time.Now()
-		fmt.Printf("%s %s %s %s %s\n",
+		fmt.Printf("%s %d %s %s %s %s\n",
 			t2.Format("2006-01-02 15:04:05"),
+			ww.Status(),
 			t2.Sub(t1),
 			r.RemoteAddr, r.Method, r.URL.Path)
 	})

@@ -66,7 +66,7 @@ func httpError(w http.ResponseWriter, f any, a ...any) {
 	httpMessage(w, err.Status, "error", err.Error())
 }
 
-// httpError sends a HTTP error as a response, with a specified HTTP status code.
+// httpCodeError sends a HTTP error as a response, with a specified HTTP status code.
 func httpCodeError(w http.ResponseWriter, code int, f any, a ...any) {
 	err := CodeError(code, f, a...).(hError)
 

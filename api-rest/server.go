@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
 	"sync"
@@ -61,13 +60,11 @@ func NewServer() *Server {
 
 	s.Middlewares = append(s.Middlewares, func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			fmt.Println("called middlewares[0]")
 			next.ServeHTTP(w, r)
 		})
 	})
 	s.Middlewares = append(s.Middlewares, func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			fmt.Println("called middlewares[1]")
 			next.ServeHTTP(w, r)
 		})
 	})
